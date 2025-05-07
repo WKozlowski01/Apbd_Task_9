@@ -5,8 +5,8 @@ using Tutorial9.Services;
 namespace Tutorial9.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-public class WarehouseController
+[Route("api/warehouse")]
+public class WarehouseController:ControllerBase
 {
     
     private readonly IDbService _DbService;
@@ -17,10 +17,14 @@ public class WarehouseController
     }
     
     [HttpPost]
-    public async Task<IActionResult> AddClientAsync(InsertDataDto data)
+    public async Task<IActionResult> CreaateRecordAsync(InsertDataDto data)
     {
-        var clients = await _DbService.CreaateClientAsync(client, cancelation);
-        return Ok(clients);
+        var result =await  _DbService.CreaateRecordAsync(data);
+        if (result.id == -1)
+        {
+            return BadRequest(result.Error);
+        }
+        return Ok(result.id);
     }
     
     
