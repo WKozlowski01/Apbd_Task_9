@@ -16,66 +16,52 @@ public class DbService : IDbService
         _configuration = configuration;
         _connectionString = configuration.GetConnectionString("DefaultConnection");
     }
-    
-   
-    
-   
-    
-    // public async Task DoSomethingAsync()
-    // {
-    //     await using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
-    //     await using SqlCommand command = new SqlCommand();
-    //     
-    //     command.Connection = connection;
-    //     await connection.OpenAsync();
-    //
-    //     DbTransaction transaction = await connection.BeginTransactionAsync();
-    //     command.Transaction = transaction as SqlTransaction;
-    //
-    //     // BEGIN TRANSACTION
-    //     try
-    //     {
-    //         command.CommandText = "INSERT INTO Animal VALUES (@IdAnimal, @Name);";
-    //         command.Parameters.AddWithValue("@IdAnimal", 1);
-    //         command.Parameters.AddWithValue("@Name", "Animal1");
-    //     
-    //         await command.ExecuteNonQueryAsync();
-    //     
-    //         command.Parameters.Clear();
-    //         command.CommandText = "INSERT INTO Animal VALUES (@IdAnimal, @Name);";
-    //         command.Parameters.AddWithValue("@IdAnimal", 2);
-    //         command.Parameters.AddWithValue("@Name", "Animal2");
-    //     
-    //         await command.ExecuteNonQueryAsync();
-    //         
-    //         await transaction.CommitAsync();
-    //     }
-    //     catch (Exception e)
-    //     {
-    //         await transaction.RollbackAsync();
-    //         throw;
-    //     }
-    //     // END TRANSACTION
-    // }
 
-    public async Task ProcedureAsync()
+    public async Task<DbResult> ProcedureAsync(InsertDataDto data)
     {
-        await using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
-        await using SqlCommand command = new SqlCommand();
+        if (!await IfProductExistsAsync(data.IdProduct))
+            return DbResult.NotFound;
+
+        if (!await IfWarehouseExistsAsync(data.IdWarehouse))
+            return DbResult.NotFound;
+
+        if (!await IfProductInOrdersExists(data.IdProduct, data.Amount))
+            return DbResult.BadRequest;
+
+        if (!await IfOrderRealizedAsync(data.IdProduct, data.Amount))
+            return DbResult.Conflict;
+
+        try
+        {
+            await using var connection = new SqlConnection(_connectionString);
+            await using var command = new SqlCommand();
         
-        command.Connection = connection;
-        await connection.OpenAsync();
+      
+            await connection.OpenAsync();
         
-        command.CommandText = "NazwaProcedury";
-        command.CommandType = CommandType.StoredProcedure;
-        
-        command.Parameters.AddWithValue("@Id", 2);
-        
-        await command.ExecuteNonQueryAsync();
-        
+            command.CommandText = "AddProductToWarehouse";
+            command.CommandType = CommandType.StoredProcedure;
+            command.Connection = connection;
+
+            command.Parameters.AddWithValue("@IdProduct", data.IdProduct);
+            command.Parameters.AddWithValue("@IdWarehouse", data.IdWarehouse);
+            command.Parameters.AddWithValue("@Amount", data.Amount);
+            command.Parameters.AddWithValue("@CreatedAt", DateTime.UtcNow);
+
+            await connection.OpenAsync();
+            await command.ExecuteNonQueryAsync();
+
+            return DbResult.Created; 
+        }
+        catch (NotImplementedException)
+        {
+            return DbResult.NotImpl;
+        }
+        catch (Exception)
+        {
+            return DbResult.Error;
+        }
     }
-
-
     public async Task<bool> IfProductExistsAsync(int idProduct)
     {
         await using var con = new SqlConnection(_connectionString);
@@ -88,7 +74,6 @@ public class DbService : IDbService
         var result = await com.ExecuteScalarAsync();
         return result != null;
     }
-
     public async Task<bool> IfWarehouseExistsAsync(int IdWarehouse)
     {
         await using var con = new SqlConnection(_connectionString);
@@ -101,8 +86,7 @@ public class DbService : IDbService
         var result = await com.ExecuteScalarAsync();
         return result != null;
     }
-
-    public async Task<bool> IfProductInOrdersExists(int IdProduct, int Amount, DateTime date)
+    public async Task<bool> IfProductInOrdersExists(int IdProduct, int Amount)
     {
         await using var con = new SqlConnection(_connectionString);
         await using var com = new SqlCommand();
@@ -116,9 +100,8 @@ public class DbService : IDbService
         return result != null;
 
     }
-
-
-    public async Task<bool> IfOrderRealizedAsync(int IdProduct, int Amount, DateTime date)
+    
+    public async Task<bool> IfOrderRealizedAsync(int IdProduct, int Amount)
     {
 
 
@@ -165,7 +148,7 @@ public class DbService : IDbService
         }
         
         
-        var productInOrdersExists = await IfProductInOrdersExists(data.IdProduct, data.Amount, data.CreatedAt);
+        var productInOrdersExists = await IfProductInOrdersExists(data.IdProduct, data.Amount);
         if (!productInOrdersExists)
         {
             error = "Product in orders does not exist";
@@ -174,7 +157,7 @@ public class DbService : IDbService
         
         
         
-        var orderRealized = await IfOrderRealizedAsync(data.IdProduct, data.Amount, data.CreatedAt);
+        var orderRealized = await IfOrderRealizedAsync(data.IdProduct, data.Amount);
         if (!orderRealized)
         {
             error = "Order already realised";
@@ -225,12 +208,6 @@ public class DbService : IDbService
          
             await transaction.CommitAsync();
             return ((int id, string Error))(result,error);
-
-
-         
-
-
-
         }
         catch (SqlException ex)
         {

@@ -16,7 +16,7 @@ public class WarehouseController:ControllerBase
         _DbService = service;   
     }
     
-    [HttpPost]
+    [HttpPost("first")]
     public async Task<IActionResult> CreaateRecordAsync(InsertDataDto data)
     {
         var result =await  _DbService.CreaateRecordAsync(data);
@@ -25,6 +25,32 @@ public class WarehouseController:ControllerBase
             return BadRequest(result.Error);
         }
         return Ok(result.id);
+    }
+    
+    
+    [HttpPost("second")]
+   
+    public async Task<IActionResult> ProcedureAsync([FromBody] InsertDataDto data)
+    {
+        try
+        {
+            var result = await _DbService.ProcedureAsync(data);
+
+            return result switch
+            {
+                DbResult.Ok         => Ok("Product added successfully."),
+                DbResult.Created    => StatusCode(201, "Product added (new entry)."),
+                DbResult.BadRequest => BadRequest("Invalid data."),
+                DbResult.NotFound   => NotFound("Product or warehouse not found."),
+                DbResult.Conflict   => Conflict("Order already realized."),
+                DbResult.NotImpl    => StatusCode(501, "Feature not implemented."),
+                _                   => StatusCode(500, "Unexpected server error.")
+            };
+        }
+        catch (Exception e)
+        {
+            return StatusCode(500, "Internal server error.");
+        }
     }
     
     
